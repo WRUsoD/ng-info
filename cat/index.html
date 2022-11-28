@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        body,div{
+            margin:0;
+            padding:0;
+        }
+
+    </style>
+</head>
+<body>
+
+
+<div id="d1">
+    <canvas id="myCanvas">
+        <p>您的系统不支持此程序!</p>
+    </canvas>
+    <br />
+    <input type="button" value="保存png图片" onclick="downloadZip()" id="btn1" />
+    <br />
+</div>
+<script src = "jszip.js"></script>
+<script src = "https://cdn.bootcdn.net/ajax/libs/FileSaver.js/2.0.4/FileSaver.min.js"></script>
+
+<script>
+    /*  canvas：canvas高度，cwidth：canvas宽度，targetWidth：移动图片宽度，targetHeight：移动图片高度，
+        scale：根据背景图片高度的缩放倍数, targetScale：移动图片额外的缩放倍数 */
+    let cheight = 600, cwidth, targetWidth, targetHeight, scale, targetScale = 1;
+    const canvas = document.getElementById("myCanvas");
+    const cansText = canvas.getContext("2d");
+    canvas.height = cheight;
+    let bgImg, targetImg;
+
+    Promise.all([loadImage("bg.jpg"), 
+    loadImage("ewm.png")]).then(img => {
+        bgImg = img[0];
+        targetImg = img[1];
+        scale = cheight / bgImg.height;
+        draw();
+    })
+
+    function draw(x = 0, y = 0) {
+        console.log(`x: ${x}, y: ${y}`)
+        cwidth =  bgImg.width * scale;
+        cheight = bgImg.height * scale;
+        canvas.height = cheight;
+        canvas.width = cwidth;
+        targetWidth = targetImg.width * scale * targetScale;
+        targetHeight = targetImg.height * scale * targetScale;
+        cansText.drawImage(bgImg, 0, 0, cwidth, cheight); 
+        cansText.drawImage(targetImg, x , y, targetWidth, targetHeight);
+    }
+    let x = 0, y = 0;
+
+    //添加鼠标按下事件
+    canvas.onmousedown = function (e) {
+        let rect = canvas.getBoundingClientRect();
+        //计算鼠标与作画坐标相对位置
+        let ax = e.clientX - rect.left * (canvas.width / rect.width) - x;
+        let ay = e.clientY - rect.top * (canvas.height / rect.height) - y;
+       
+        //只有点图标才可以移动
+        if (ax > targetWidth || ax < 0  || ay > targetHeight || ay < 0) {
+            return;
+        }
+        //按下后可移动
+        canvas.onmousemove = function(e){
+            //作画坐标
+            x = e.clientX - rect.left * (canvas.width / rect.width) - ax;
+            y = e.clientY - rect.top * (canvas.height / rect.height) - ay;
+            //限制移动不能超出画布
+            x = x > cwidth ? cwidth : x;
+            y = y > cheight ? cheight : y;
+            draw(x, y);
+        };
+
+
+        //鼠标抬起清除绑定事件
+        canvas.onmouseup = function(){
+            canvas.onmousemove = null;
+            canvas.onmouseup = null;
+        };
+    }
+    canvas.onmousewheel = function(e) {
+            let rect = canvas.getBoundingClientRect();
+            ax = e.clientX - rect.left * (canvas.width / rect.width) - x;
+            ay = e.clientY - rect.top * (canvas.height / rect.height) - y;
+            let mul = e.wheelDelta > 0 ? 0.05 : -0.05;
+            //canvas放大缩小
+            if (ax > targetWidth || ax < 0  || ay > targetHeight || ay < 0) {
+                scale += mul;
+                x = x * bgImg.width * scale / cwidth;
+                y = y * bgImg.height * scale / cheight;
+                draw(x, y);
+                return false;
+            }
+            //最大2倍，最小0.1
+            if (targetScale <= 0.1 && mul < 0 || targetScale >=2 && mul > 0) {
+                return false;
+            } 
+            // 判断是放大还是缩小
+            targetScale += mul;
+            x -= targetImg.width * scale * mul / 2;
+            y -= targetImg.height * scale * mul / 2;
+            draw(x, y);
+            return false;
+        }
+
+    function loadImage(url) {
+        return new Promise((resolve, reject) => {
+            let img = new Image();
+            img.src = url;
+            // img.setAttribute("crossorigin", "anonymous");
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+        })
+    }
+
+    function downloadClick() {
+        //按原图绘制图片
+        let orignCanvas =  document.createElement("canvas");
+        orignCanvas.height = cheight / scale;
+        orignCanvas.width = cwidth / scale;
+        document.querySelector('#d1').appendChild(orignCanvas);
+        let orignCont = orignCanvas.getContext("2d");
+        orignCont.drawImage(bgImg, 0, 0);
+        orignCont.drawImage(targetImg, x / scale, y / scale, targetWidth / scale, targetHeight /scale);
+        //下载
+        let fileName = 'merge.png';
+        let dataImg = new Image();
+        let imgData = orignCanvas.toDataURL('image/png', 1);
+        dataImg.src = imgData;
+        let blob = dataURLtoBlob(imgData);
+        let objurl = URL.createObjectURL(blob);
+        document.querySelector('#d1').appendChild(dataImg);
+        let alink = document.createElement("a");
+        alink.href = objurl;
+        alink.download = fileName;
+        alink.click();
+        document.querySelector('#d1').removeChild(dataImg);
+        document.querySelector('#d1').removeChild(orignCanvas);
+    }
+
+    function dataURLtoBlob(dataurl) {
+        let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], { type: mime });
+    }
+
+    function downloadZip() {
+        let d0 = Date.now();
+        let orignCanvas =  document.createElement("canvas");
+        orignCanvas.height = cheight / scale;
+        orignCanvas.width = cwidth / scale;
+        orignCanvas.style.display = 'none';
+        let orignCont = orignCanvas.getContext("2d");
+        let zip = new JSZip();
+        let folder = zip.folder("image");
+        let arrProm = [], dataImg, imgData, fileName, base64Data;
+        for (let i = 0; i < 10; i ++) {
+            arrProm.push(loadImage("ewm.png").then(img => {
+                orignCont.drawImage(bgImg, 0, 0);
+                orignCont.drawImage(img, x / scale, y / scale, targetWidth / scale, targetHeight /scale);
+                fileName = i + 'merge.png';
+                dataImg = new Image();
+                imgData = orignCanvas.toDataURL(fileName, 1);
+                base64Data = imgData.split('base64,')[1];
+                folder.file(fileName, base64Data, {base64: true});
+                console.log("ewm");
+            }))
+            console.log("i" + i);
+        }
+        Promise.all(arrProm).then(() => {
+            let d1 = Date.now();
+            console.log(`time1: ${d1 - d0}`)
+            // 生成zip文件并下载
+            zip.generateAsync({type: 'blob'}).then(function(content) {
+                // 下载的文件名
+                var filename = 'image.zip';
+                // 创建隐藏的可下载链接
+                var eleLink = document.createElement('a');
+                eleLink.download = filename;
+                eleLink.style.display = 'none';
+                // 下载内容转变成blob地址
+                eleLink.href = URL.createObjectURL(content);
+                // 触发点击
+                document.body.appendChild(eleLink);
+                eleLink.click();
+                // 然后移除
+                document.body.removeChild(eleLink);
+                let d2 = Date.now();
+                console.log(`time2: ${d2 - d0}, ${d2 -d1}`)
+            });
+        })
+    }
+
+</script>
+</body>
+</html>
